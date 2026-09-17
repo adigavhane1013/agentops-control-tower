@@ -1,6 +1,6 @@
 # AgentOps Control Tower
 
-AgentOps Control Tower is a personal AI Engineer project that demonstrates a governed refund workflow built around a Google ADK Finance Agent.
+AgentOps Control Tower is a  project that demonstrates a governed refund workflow built around a Google ADK Finance Agent.
 
 The Finance Agent handles the user's refund request and uses tools to retrieve customer/order data and submit the request to the Control Tower. The Control Tower remains the authority for the deterministic refund decision and returns one of three outcomes: `ALLOW`, `HUMAN_APPROVAL`, or `BLOCK`.
 

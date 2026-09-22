@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.database.database import SessionLocal
-from app.database.models import Order, Refund
+from app.database.models import Refund
 from app.control_tower.control_tower import evaluate_refund_request
+from app.tools.refund_request_tool import create_canonical_refund_request
 
 
 router = APIRouter(
@@ -22,36 +23,30 @@ class RefundRequest(BaseModel):
 @router.post("/request")
 def create_refund_request(request: RefundRequest):
 
-    db = SessionLocal()
+    result = create_canonical_refund_request(
+        customer_id=request.customer_id,
+        order_id=request.order_id,
+        requested_amount=request.refund_amount,
+        reason=request.reason,
+    )
 
-    try:
-        order = (
-            db.query(Order)
-            .filter(
-                Order.id == request.order_id,
-                Order.customer_id == request.customer_id
-            )
-            .first()
-        )
-
-        if not order:
+    if not result["success"]:
+        if result["error"] == "Order not found for this customer":
             raise HTTPException(
                 status_code=404,
-                detail="Customer or order not found"
+                detail=result["error"],
             )
 
-        result = evaluate_refund_request(
-            customer_id=request.customer_id,
-            order_id=request.order_id,
-            refund_amount=request.refund_amount,
-            order_amount=order.amount,
-            reason=request.reason
+        raise HTTPException(
+            status_code=400,
+            detail=result["error"],
         )
 
-        return result
+    control_tower_result = evaluate_refund_request(
+        refund_request_id=result["refund_request_id"]
+    )
 
-    finally:
-        db.close()
+    return control_tower_result
 
 
 @router.get("/")

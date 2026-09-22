@@ -2,8 +2,20 @@ from app.database.database import SessionLocal
 from app.database.models import Customer, Order
 
 
-def get_customer_order(customer_id: int) -> dict:
-    """Retrieve customer and order information from the database."""
+def get_customer_order(customer_id: int, order_id: int) -> dict:
+    """Retrieve an exact customer and order pair from the database."""
+
+    if customer_id <= 0:
+        return {
+            "success": False,
+            "error": "Invalid customer ID"
+        }
+
+    if order_id <= 0:
+        return {
+            "success": False,
+            "error": "Invalid order ID"
+        }
 
     db = SessionLocal()
 
@@ -22,7 +34,10 @@ def get_customer_order(customer_id: int) -> dict:
 
         order = (
             db.query(Order)
-            .filter(Order.customer_id == customer_id)
+            .filter(
+                Order.id == order_id,
+                Order.customer_id == customer_id
+            )
             .first()
         )
 

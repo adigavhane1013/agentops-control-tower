@@ -1,28 +1,22 @@
 import importlib
-import sys
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
-_test_temp_dir = None
 _test_engine = None
 
 
 def _configure_test_database():
-    global _test_temp_dir
     global _test_engine
 
-    # Create a temporary directory that exists for the pytest session.
-    _test_temp_dir = TemporaryDirectory(prefix="agentops_pytest_")
-
-    test_db_path = Path(_test_temp_dir.name) / "test_agentops.db"
-
+    # Use one shared in-memory SQLite database for the entire pytest session.
+    # StaticPool keeps the same connection available to all tests.
     _test_engine = create_engine(
-        f"sqlite:///{test_db_path}",
+        "sqlite://",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     TestSessionLocal = sessionmaker(
@@ -38,7 +32,7 @@ def _configure_test_database():
     Customer = models_module.Customer
     Order = models_module.Order
 
-    # Create the schema in the isolated test database.
+    # Create the schema in the isolated in-memory test database.
     Base.metadata.create_all(bind=_test_engine)
 
     # Seed the same baseline data used by the real application.
@@ -91,13 +85,15 @@ def _configure_test_database():
     finally:
         db.close()
 
-    # Replace SessionLocal in the application modules before pytest
-    # imports the test modules that use them.
+    # Replace the application's database session/engine before
+    # importing test modules that depend on them.
     database_module.SessionLocal = TestSessionLocal
     database_module.engine = _test_engine
 
     modules_to_patch = [
         "app.tools.refund_tool",
+        "app.tools.tool_gateway",
+        "app.tools.refund_request_tool",
         "app.tools.approval_tool",
         "app.tools.approval_action",
         "app.control_tower.control_tower",
@@ -116,22 +112,18 @@ def _configure_test_database():
 
 def pytest_configure(config):
     """
-    Configure the isolated test database before test collection.
+    Configure the isolated in-memory test database before pytest
+    collects the test modules.
     """
     _configure_test_database()
 
 
 def pytest_sessionfinish(session, exitstatus):
     """
-    Remove the temporary test database after pytest finishes.
+    Dispose the in-memory test database after the pytest session.
     """
-    global _test_temp_dir
     global _test_engine
 
     if _test_engine is not None:
         _test_engine.dispose()
         _test_engine = None
-
-    if _test_temp_dir is not None:
-        _test_temp_dir.cleanup()
-        _test_temp_dir = None
